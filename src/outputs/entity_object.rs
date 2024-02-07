@@ -31,7 +31,7 @@ impl std::default::Default for EntityObjectConfig {
     }
 }
 
-use crate::{format_variant, BuilderContext, GuardAction, TypesMapHelper};
+use crate::{ActiveEnumBuilder, BuilderContext, GuardAction, TypesMapHelper};
 
 /// This builder produces the GraphQL object of a SeaORM entity
 pub struct EntityObjectBuilder {
@@ -109,6 +109,8 @@ impl EntityObjectBuilder {
         };
 
         T::Column::iter().fold(Object::new(object_name), |object, column: T::Column| {
+            let context = self.context;
+
             let column_name = self.column_name::<T>(&column);
 
             let column_def = column.def();
@@ -135,14 +137,12 @@ impl EntityObjectBuilder {
                 _ => false,
             };
 
-            let guard = self
-                .context
+            let guard = context
                 .guards
                 .field_guards
                 .get(&format!("{}.{}", &object_name, &column_name));
 
-            let conversion_fn = self
-                .context
+            let conversion_fn = context
                 .types
                 .output_conversions
                 .get(&format!("{entity_name}.{column_name}"));
@@ -185,12 +185,14 @@ impl EntityObjectBuilder {
                     });
                 }
 
-                FieldFuture::new(async move {
-                    Ok(sea_query_value_to_graphql_value(
-                        object.get(column),
-                        is_enum,
-                    ))
-                })
+                let value = sea_query_value_to_graphql_value(
+                    context,
+                    object.get(column),
+                    is_enum,
+                    column_def.get_column_type(),
+                );
+
+                FieldFuture::new(async move { Ok(value) })
             });
 
             object.field(field)
@@ -199,8 +201,10 @@ impl EntityObjectBuilder {
 }
 
 fn sea_query_value_to_graphql_value(
+    context: &'static BuilderContext,
     sea_query_value: sea_orm::sea_query::Value,
     is_enum: bool,
+    column_type: &ColumnType,
 ) -> Option<Value> {
     match sea_query_value {
         sea_orm::Value::Bool(value) => value.map(Value::from),
@@ -214,9 +218,18 @@ fn sea_query_value_to_graphql_value(
         sea_orm::Value::BigUnsigned(value) => value.map(Value::from),
         sea_orm::Value::Float(value) => value.map(Value::from),
         sea_orm::Value::Double(value) => value.map(Value::from),
-        sea_orm::Value::String(value) if is_enum => {
-            value.map(|it| Value::from(format_variant(it.as_str())))
-        }
+        sea_orm::Value::String(value) if is_enum => value.map(|it| {
+            let builder = ActiveEnumBuilder { context };
+
+            let enum_name = match column_type {
+                ColumnType::Enum { name, .. } => name.to_string(),
+                _ => panic!("Expected enum column type"),
+            };
+
+            let gql_name = builder.variant_name(enum_name.as_str(), it.as_str());
+
+            Value::from(gql_name)
+        }),
         sea_orm::Value::String(value) => value.map(|it| Value::from(it.as_str())),
         sea_orm::Value::Char(value) => value.map(|it| Value::from(it.to_string())),
 
@@ -228,7 +241,8 @@ fn sea_query_value_to_graphql_value(
             Value::List(
                 it.into_iter()
                     .map(|item| {
-                        sea_query_value_to_graphql_value(item, is_enum).unwrap_or(Value::Null)
+                        sea_query_value_to_graphql_value(context, item, is_enum, column_type)
+                            .unwrap_or(Value::Null)
                     })
                     .collect(),
             )
