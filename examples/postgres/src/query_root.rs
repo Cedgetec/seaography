@@ -1,9 +1,19 @@
 use crate::entities::*;
 use async_graphql::dynamic::*;
 use sea_orm::DatabaseConnection;
-use seaography::{async_graphql, lazy_static, Builder, BuilderContext};
+use seaography::{heck::ToSnakeCase, ActiveEnumConfig, Builder, BuilderContext};
 
-lazy_static::lazy_static! { static ref CONTEXT : BuilderContext = BuilderContext :: default () ; }
+lazy_static::lazy_static! {
+    static ref CONTEXT: BuilderContext = BuilderContext {
+        active_enum: ActiveEnumConfig {
+            variant_name: Box::new(|_enum_name: &str, variant: &str| -> String {
+                variant.to_snake_case()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+}
 
 pub fn schema(
     database: DatabaseConnection,
