@@ -16,6 +16,11 @@ pub use types_map::*;
 pub mod filter_types_map;
 pub use filter_types_map::*;
 
+#[cfg(any(feature = "with-chrono"))]
+pub mod date_format;
+#[cfg(any(feature = "with-chrono"))]
+pub use date_format::*;
+
 /// Used to hold the configuration for various aspects
 /// related to our builder options. You can modify the
 /// context to make the generated GraphQL nodes match

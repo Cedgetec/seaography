@@ -11,6 +11,9 @@ pub struct EntityObjectConfig {
     pub column_name: crate::ComplexNamingFn,
     /// suffix that is appended on basic version of entity type
     pub basic_type_suffix: String,
+    /// used to format the date values
+    #[cfg(any(feature = "with-chrono"))]
+    pub date_format: crate::DateFormatFn,
 }
 
 impl std::default::Default for EntityObjectConfig {
@@ -27,11 +30,17 @@ impl std::default::Default for EntityObjectConfig {
                 }
             }),
             basic_type_suffix: "Basic".into(),
+
+            #[cfg(feature = "with-chrono")]
+            date_format: Box::new(|date: DateValue| date.to_string()),
         }
     }
 }
 
 use crate::{ActiveEnumBuilder, BuilderContext, GuardAction, TypesMapHelper};
+
+#[cfg(feature = "with-chrono")]
+use crate::DateValue;
 
 /// This builder produces the GraphQL object of a SeaORM entity
 pub struct EntityObjectBuilder {
@@ -254,34 +263,38 @@ fn sea_query_value_to_graphql_value(
 
         #[cfg(feature = "with-chrono")]
         #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
-        sea_orm::sea_query::Value::ChronoDate(value) => value.map(|it| Value::from(it.to_string())),
+        sea_orm::sea_query::Value::ChronoDate(value) => {
+            value.map(|it| Value::from((context.entity_object.date_format)((*it).into())))
+        }
 
         #[cfg(feature = "with-chrono")]
         #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
-        sea_orm::sea_query::Value::ChronoTime(value) => value.map(|it| Value::from(it.to_string())),
+        sea_orm::sea_query::Value::ChronoTime(value) => {
+            value.map(|it| Value::from((context.entity_object.date_format)((*it).into())))
+        }
 
         #[cfg(feature = "with-chrono")]
         #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
         sea_orm::sea_query::Value::ChronoDateTime(value) => {
-            value.map(|it| Value::from(it.to_string()))
+            value.map(|it| Value::from((context.entity_object.date_format)((*it).into())))
         }
 
         #[cfg(feature = "with-chrono")]
         #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
         sea_orm::sea_query::Value::ChronoDateTimeUtc(value) => {
-            value.map(|it| Value::from(it.to_string()))
+            value.map(|it| Value::from((context.entity_object.date_format)((*it).into())))
         }
 
         #[cfg(feature = "with-chrono")]
         #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
         sea_orm::sea_query::Value::ChronoDateTimeLocal(value) => {
-            value.map(|it| Value::from(it.to_string()))
+            value.map(|it| Value::from((context.entity_object.date_format)((*it).into())))
         }
 
         #[cfg(feature = "with-chrono")]
         #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
         sea_orm::sea_query::Value::ChronoDateTimeWithTimeZone(value) => {
-            value.map(|it| Value::from(it.to_string()))
+            value.map(|it| Value::from((context.entity_object.date_format)((*it).into())))
         }
 
         #[cfg(feature = "with-time")]
